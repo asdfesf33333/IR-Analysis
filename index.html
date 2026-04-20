@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absenteeism Analytics Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <style>
+        :root { --bg: #0f172a; --card: rgba(30, 41, 59, 0.7); --accent: #818cf8; --text: #f8fafc; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 2rem; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: var(--card); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .grid { display: grid; grid-template-columns: 320px 1fr; gap: 2rem; }
+        .upload-zone { border: 2px dashed var(--accent); border-radius: 16px; padding: 2rem; text-align: center; cursor: pointer; margin-bottom: 1.5rem; }
+        .btn { background: var(--accent); color: #fff; border: none; padding: 1rem; border-radius: 12px; font-weight: 700; width: 100%; cursor: pointer; transition: 0.2s; }
+        .btn:disabled { background: #334155; cursor: not-allowed; }
+        .status { margin-top: 1rem; font-size: 0.9rem; color: #94a3b8; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.85rem; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        th { color: var(--accent); text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header style="text-align:center; margin-bottom: 3rem;">
+            <h1>Absenteeism Dashboard</h1>
+            <p style="color:#94a3b8;">Python Analysis in the Browser • Powered by Pyodide</p>
+        </header>
+
+        <div class="grid">
+            <div class="sidebar">
+                <div class="card">
+                    <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                        <p id="fileName">Select .xlsx File</p>
+                        <input type="file" id="fileInput" accept=".xlsx" style="display:none">
+                    </div>
+                    <button class="btn" id="runBtn" disabled onclick="process()">Loading Python...</button>
+                    <div class="status" id="status">Loading Environment...</div>
+                </div>
+            </div>
+
+            <div class="main">
+                <div class="card">
+                    <h3>Weekly Leave Patterns</h3>
+                    <div id="plot" style="height: 400px;"></div>
+                </div>
+                <div class="card" id="fCard" style="display:none;">
+                    <h3>Factor Analysis Results</h3>
+                    <div style="overflow-x:auto;">
+                        <table><thead id="tHead"></thead><tbody id="tBody"></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let py;
+        async function init() {
+            try {
+                py = await loadPyodide();
+                await py.loadPackage(['pandas', 'scipy', 'scikit-learn', 'micropip', 'openpyxl']);
+                const micropip = py.pyimport("micropip");
+                await micropip.install('factor_analyzer');
+                document.getElementById('status').innerText = '✓ Ready';
+                document.getElementById('runBtn').innerText = 'Run Analysis';
+                document.getElementById('runBtn').disabled = false;
+            } catch (e) { document.getElementById('status').innerText = 'Error: ' + e.message; }
+        }
+        init();
+
+        async function process() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return alert('Select file');
+            document.getElementById('status').innerText = 'Analyzing...';
+            const buffer = await file.arrayBuffer();
+            py.FS.writeFile('data.xlsx', new Uint8Array(buffer));
+
+            const code = `
+import pandas as pd, calendar, json, numpy as np
+from datetime import date
+from factor_analyzer import FactorAnalyzer
+data = pd.read_excel('data.xlsx', sheet_name=None)
+scatter, matrix, keys = [], [], set()
+for name, df in data.items():
+    df.columns = [str(c).strip() for c in df.columns]
+    dates = [c for c in df.columns if c.isdigit()]
+    for _, row in df.iterrows():
+        abs_row = []
+        for d in dates:
+            is_p = (str(row[d]).strip().upper() == 'P-P')
+            try:
+                m = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}.get(name.lower())
+                wk = date(2026, m, int(d)).strftime('%A')
+                if not is_p: scatter.append({'Weekday': wk})
+                k = f"{name}_{d}"; keys.add(k)
+                abs_row.append({'k': k, 'v': 0 if is_p else 1})
+            except: pass
+        matrix.append(abs_row)
+sorted_k = sorted(list(keys))
+rows = [[{x['k']: x['v'] for x in r}.get(k,0) for k in sorted_k] for r in matrix]
+fa_df = pd.DataFrame(rows, columns=sorted_k).loc[:, lambda x: (x != x.iloc[0]).any()]
+f_table = []
+if not fa_df.empty and fa_df.shape[0] > fa_df.shape[1]:
+    fa = FactorAnalyzer(rotation="varimax")
+    fa.fit(fa_df)
+    n = sum(fa.get_eigenvalues()[0] > 1)
+    if n > 0:
+        fa = FactorAnalyzer(n_factors=n, rotation="varimax")
+        fa.fit(fa_df)
+        f_table = pd.DataFrame(fa.loadings_, columns=[f"F{i+1}" for i in range(n)], index=fa_df.columns).reset_index().round(3).to_dict(orient='records')
+json.dumps({'scatter': scatter, 'factors': f_table})
+`;
+            const result = JSON.parse(await py.runPythonAsync(code));
+            render(result);
+            document.getElementById('status').innerText = '✓ Complete';
+        }
+
+        function render(data) {
+            const wks = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const counts = wks.map(w => data.scatter.filter(x => x.Weekday === w).length);
+            Plotly.newPlot('plot', [{x:wks, y:counts, mode:'lines+markers', line:{shape:'spline', color:'#818cf8', width:4}}], 
+                { paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{color:'#94a3b8'} });
+            
+            if (data.factors.length > 0) {
+                document.getElementById('fCard').style.display = 'block';
+                const cols = Object.keys(data.factors[0]);
+                document.getElementById('tHead').innerHTML = '<tr>' + cols.map(c => `<th>${c==='index'?'Item':c}</th>`).join('') + '</tr>';
+                document.getElementById('tBody').innerHTML = data.factors.map(r => '<tr>' + cols.map(c => `<td>${r[c]}</td>`).join('') + '</tr>').join('');
+            }
+        }
+        document.getElementById('fileInput').onchange = (e) => document.getElementById('fileName').innerText = e.target.files[0].name;
+    </script>
+</body>
+</html>
