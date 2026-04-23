@@ -1,83 +1,541 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Absenteeism Analytics Dashboard</title>
+    <title>Premium Absenteeism Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <script src="https://www.lactame.com/lib/ml/3.0.0/ml.min.js"></script>
     <style>
-        :root { --bg: #0f172a; --card: rgba(30, 41, 59, 0.7); --accent: #818cf8; --text: #f8fafc; }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
-        body { background-color: var(--bg); color: var(--text); padding: 2rem; min-height: 100vh; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .card { background: var(--card); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .grid { display: grid; grid-template-columns: 320px 1fr; gap: 2rem; }
-        .upload-zone { border: 2px dashed var(--accent); border-radius: 16px; padding: 2rem; text-align: center; cursor: pointer; margin-bottom: 1.5rem; }
-        .btn { background: var(--accent); color: #fff; border: none; padding: 1rem; border-radius: 12px; font-weight: 700; width: 100%; cursor: pointer; transition: 0.2s; }
-        .btn:disabled { background: #334155; cursor: not-allowed; }
-        .status { margin-top: 1rem; font-size: 0.9rem; color: #94a3b8; text-align: center; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.85rem; }
-        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        th { color: var(--accent); text-transform: uppercase; }
+        :root {
+            --bg: #030712;
+            --card: rgba(17, 24, 39, 0.8);
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --text: #f3f4f6;
+            --text-dim: #9ca3af;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #1e1b4b, #030712);
+            color: var(--text);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--accent);
+            border-radius: 20px;
+            padding: 2.5rem;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+            background: var(--glass);
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover {
+            background: var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .select-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .select-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        select {
+            width: 100%;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 12px;
+            border-radius: 12px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        select option {
+            background: #111827;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: #fff;
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            width: 100%;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 4px 15px var(--accent-glow);
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+
+        .btn-secondary {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            margin-top: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+
+        th,
+        td {
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            color: var(--accent);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+
+        .factor-header {
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .factor-header-content {
+            display: inline-block;
+        }
+
+        .factor-header:hover {
+            color: var(--accent);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #111827;
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            border-radius: 24px;
+            padding: 2.5rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .close-btn {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--text-dim);
+        }
+
+        #employeeList {
+            overflow-y: auto;
+            flex-grow: 1;
+            margin-bottom: 1.5rem;
+        }
+
+        .emp-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        #status {
+            margin-top: 10px;
+            text-align: center;
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <header style="text-align:center; margin-bottom: 3rem;">
-            <h1>Absenteeism Dashboard</h1>
-            <p style="color:#94a3b8;">Python Analysis in the Browser • Powered by Pyodide</p>
+        <header style="text-align:center; margin-bottom:4rem;">
+            <h1
+                style="font-size: 3rem; background: linear-gradient(to right, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                Absenteeism Analytics Pro</h1>
+            <p style="color: var(--text-dim); margin-top: 0.5rem; letter-spacing: 2px;">Intelligent Pattern
+                Classification & Factor Analysis</p>
         </header>
 
         <div class="grid">
             <div class="sidebar">
                 <div class="card">
                     <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
-                        <p id="fileName">Select .xlsx File</p>
+                        <p id="fileName" style="font-weight: bold;">Drop Excel File Here</p>
+                        <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 0.5rem;">.xlsx supported</p>
                         <input type="file" id="fileInput" accept=".xlsx" style="display:none">
                     </div>
-                    <button class="btn" id="runBtn" disabled onclick="process()">Loading Python...</button>
-                    <div class="status" id="status">Loading Environment...</div>
+                    <div class="select-group">
+                        <label>Select Analysis Month</label>
+                        <select id="monthSelect">
+                            <option value="">Upload file first...</option>
+                        </select>
+                    </div>
+                    <div id="status"></div>
                 </div>
             </div>
 
             <div class="main">
-                <div class="card">
-                    <h3>Weekly Leave Patterns</h3>
-                    <div id="plot" style="height: 400px;"></div>
+                <div class="charts-grid" id="chartsContainer">
+                    <div class="card">
+                        <div id="plot1" style="height: 300px;"></div>
+                    </div>
+                    <div class="card">
+                        <div id="plot2" style="height: 300px;"></div>
+                    </div>
+                    <div class="card">
+                        <div id="plot3" style="height: 300px;"></div>
+                    </div>
+                    <div class="card">
+                        <div id="plot4" style="height: 300px;"></div>
+                    </div>
                 </div>
                 <div class="card" id="fCard" style="display:none;">
-                    <h3>Factor Analysis Results</h3>
+                    <h3>Factor Table (Correlation Factors)</h3>
                     <div style="overflow-x:auto;">
-                        <table><thead id="tHead"></thead><tbody id="tBody"></tbody></table>
+                        <table id="fTable"></table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <div class="modal" id="detailsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Factor Details</h2>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="employeeList"></div>
+            <button class="btn" onclick="copyListData()">Copy Data to Clipboard</button>
+        </div>
+    </div>
+
     <script>
-        let py;
-        async function init() {
-            try {
-                py = await loadPyodide();
-                // Load core numerical packages first
-                await py.loadPackage(['pandas', 'scipy', 'scikit-learn', 'micropip']);
-                const micropip = py.pyimport("micropip");
-                // Install pure python packages via micropip
-                await micropip.install(['factor-analyzer', 'openpyxl', 'et-xmlfile']);
-                
-                document.getElementById('status').innerText = '✓ Ready';
-                document.getElementById('runBtn').innerText = 'Run Analysis';
-                document.getElementById('runBtn').disabled = false;
-            } catch (e) { 
-                document.getElementById('status').innerText = 'Error: ' + e.message; 
-                console.error(e);
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        let workbookData = null;
+        let processedResults = {};
+
+        function handleFile() {
+            const input = document.getElementById('fileInput');
+            if (!input.files[0]) return alert('Upload file');
+
+            if (workbookData && document.getElementById('monthSelect').value) {
+                renderAnalysis(document.getElementById('monthSelect').value);
+                return;
+            }
+
+            const reader = new FileReader();
+            document.getElementById('status').innerText = 'Reading File...';
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                workbookData = XLSX.read(data, { type: 'array' });
+                populateMonthSelect();
+                document.getElementById('status').innerText = '✓ File Loaded. Select month.';
+            };
+            reader.readAsArrayBuffer(input.files[0]);
+        }
+
+        function populateMonthSelect() {
+            const select = document.getElementById('monthSelect');
+            select.innerHTML = '';
+            workbookData.SheetNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.innerText = name;
+                select.appendChild(option);
+            });
+            if (workbookData.SheetNames.length > 0) {
+                renderAnalysis(workbookData.SheetNames[0]);
             }
         }
-        init();
 
-        async function process() {
-            const file = document.getElementById('fileInput').files[0];
-            if (!file) return alert('
+        function renderAnalysis(sheetName) {
+            document.getElementById('status').innerText = `Analyzing ${sheetName}...`;
+            const sheet = workbookData.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet);
+
+            // Parse Year and Month from sheetName (e.g., "March 2026")
+            let year = 2026;
+            let monthIdx = 0;
+            const parts = sheetName.split(/[\s_]+/);
+            parts.forEach(p => {
+                const m = monthNames.findIndex(mn => mn.toLowerCase() === p.toLowerCase());
+                if (m !== -1) monthIdx = m;
+                if (p.match(/^\d{4}$/)) year = parseInt(p);
+            });
+
+            const employees = [];
+
+            // Determine actual number of days in this specific month/year
+            const daysInMonthCount = new Date(year, monthIdx + 1, 0).getDate();
+            const daysArray = Array.from({ length: daysInMonthCount }, (_, i) => i + 1);
+
+            rows.forEach((row, idx) => {
+                const empName = row['NAME'] || `Unknown ${idx + 1}`;
+                const userId = row['USERID'] || `ID_${idx + 1}`;
+                let totalLeaves = 0;
+                const dailyStatus = {};
+
+                daysArray.forEach(day => {
+                    const cellValue = row[day] !== undefined ? row[day] : row[String(day)];
+
+                    if (cellValue !== undefined && cellValue !== null && String(cellValue).trim() !== "") {
+                        // ONLY "A-A" is considered absent
+                        const isAbsent = String(cellValue).trim().toUpperCase() === 'A-A';
+                        dailyStatus[day] = isAbsent;
+                        if (isAbsent) totalLeaves++;
+                    } else {
+                        // Empty or missing data is treated as present
+                        dailyStatus[day] = false;
+                    }
+                });
+
+                let factor = 1;
+                if (totalLeaves <= 5) factor = 1;
+                else if (totalLeaves <= 10) factor = 2;
+                else if (totalLeaves <= 15) factor = 3;
+                else factor = 4;
+
+                employees.push({ name: empName, id: userId, totalLeaves, dailyStatus, factor });
+            });
+
+            const factors = [
+                { id: 1, label: '0-5 Days', emps: employees.filter(e => e.factor === 1) },
+                { id: 2, label: '5-10 Days', emps: employees.filter(e => e.factor === 2) },
+                { id: 3, label: '10-15 Days', emps: employees.filter(e => e.factor === 3) },
+                { id: 4, label: '15-31 Days', emps: employees.filter(e => e.factor === 4) }
+            ];
+
+            processedResults = { employees, factors, sortedDays: daysArray, year, monthIdx };
+
+            renderCharts(factors, year, monthIdx);
+            renderTable(employees, factors, daysArray);
+
+            document.getElementById('fCard').style.display = 'block';
+            document.getElementById('status').innerText = '✓ Analysis Complete';
+        }
+
+        function renderCharts(factors, year, monthIdx) {
+            const wks = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+            factors.forEach((f, i) => {
+                const counts = { 'Monday': 0, 'Tuesday': 0, 'Wednesday': 0, 'Thursday': 0, 'Friday': 0, 'Saturday': 0, 'Sunday': 0 };
+
+                f.emps.forEach(emp => {
+                    Object.keys(emp.dailyStatus).forEach(d => {
+                        if (emp.dailyStatus[d]) {
+                            const date = new Date(year, monthIdx, parseInt(d));
+                            const wk = date.toLocaleDateString('en-US', { weekday: 'long' });
+                            counts[wk]++;
+                        }
+                    });
+                });
+
+                const y = wks.map(w => counts[w]);
+
+                const trace = {
+                    x: wks,
+                    y: y,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: f.label,
+                    line: { shape: 'spline', color: ['#6366f1', '#a855f7', '#ec4899', '#f97316'][i], width: 3 },
+                    marker: { size: 8 }
+                };
+
+                const layout = {
+                    title: { text: f.label, font: { color: '#f3f4f6', size: 14 } },
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    margin: { t: 40, b: 40, l: 40, r: 20 },
+                    xaxis: { showgrid: false, color: '#9ca3af', tickfont: { size: 10 } },
+                    yaxis: { showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }
+                };
+
+                Plotly.newPlot(`plot${i + 1}`, [trace], layout);
+            });
+        }
+
+        function calculateCorrelation(dayAbsences, groupMemberships) {
+            let n = dayAbsences.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+            for (let i = 0; i < n; i++) {
+                let x = dayAbsences[i];
+                let y = groupMemberships[i];
+                sumX += x;
+                sumY += y;
+                sumXY += x * y;
+                sumX2 += x * x;
+                sumY2 += y * y;
+            }
+            let numerator = n * sumXY - sumX * sumY;
+            let denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            if (denominator === 0) return 0;
+            return numerator / denominator;
+        }
+
+        function renderTable(employees, factors, days) {
+            const table = document.getElementById('fTable');
+            let h = `<tr><th>Date</th>`;
+            factors.forEach(f => {
+                h += `<th onclick="showFactorDetails(${f.id})" class="factor-header">
+                        <div class="factor-header-content">${f.label} ⬇️ <br><span style="font-size:0.6rem; color:var(--text-dim)">(${f.emps.length} Emp)</span></div>
+                      </th>`;
+            });
+            h += `</tr>`;
+
+            let b = days.map(d => {
+                let row = `<tr><td><b>${d} ${monthNames[processedResults.monthIdx]}</b></td>`;
+
+                const dayAbsences = employees.map(e => e.dailyStatus[d] ? 1 : 0);
+
+                factors.forEach(f => {
+                    const groupMemberships = employees.map(e => e.factor === f.id ? 1 : 0);
+                    const corr = calculateCorrelation(dayAbsences, groupMemberships);
+                    const v = corr.toFixed(3);
+                    const style = Math.abs(corr) > 0.2 ? 'color:var(--accent);font-weight:bold;' : 'color:var(--text-dim);opacity:0.7;';
+                    row += `<td style="${style}">${v}</td>`;
+                });
+                return row + `</tr>`;
+            }).join('');
+
+            table.innerHTML = h + b;
+        }
+
+        let currentModalFactor = null;
+        function showFactorDetails(factorId) {
+            const factor = processedResults.factors.find(f => f.id === factorId);
+            currentModalFactor = factor;
+            document.getElementById('modalTitle').innerText = `${factor.label} - Employee List`;
+            const listDiv = document.getElementById('employeeList');
+            listDiv.innerHTML = factor.emps.map(e => `
+                <div class="emp-item">
+                    <span><b>${e.name}</b> (${e.id})</span>
+                    <span style="color:var(--accent)">${e.totalLeaves} Leaves</span>
+                </div>
+            `).join('');
+            document.getElementById('detailsModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('detailsModal').style.display = 'none';
+        }
+
+        function copyListData() {
+            if (!currentModalFactor) return;
+            const text = currentModalFactor.emps.map(e => `${e.name}\t${e.id}\t${e.totalLeaves}`).join('\n');
+            navigator.clipboard.writeText(`NAME\tUSERID\tLEAVES\n${text}`).then(() => {
+                alert('Copied to clipboard!');
+            });
+        }
+
+        document.getElementById('fileInput').onchange = e => {
+            if (e.target.files.length > 0) {
+                document.getElementById('fileName').innerText = e.target.files[0].name;
+                workbookData = null;
+                document.getElementById('status').innerText = '';
+                handleFile();
+            }
+        };
+
+        document.getElementById('monthSelect').onchange = e => {
+            if (workbookData && e.target.value) {
+                renderAnalysis(e.target.value);
+            }
+        };
+
+        window.onclick = e => {
+            if (e.target == document.getElementById('detailsModal')) closeModal();
+        };
+    </script>
+</body>
+
+</html>
