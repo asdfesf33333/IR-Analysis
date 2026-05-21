@@ -169,6 +169,35 @@
             gap: 2rem;
         }
 
+        .tabs {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s ease;
+            font-weight: 700;
+        }
+
+        .tab:hover {
+            background: var(--accent-glow);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            border-color: transparent;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
         /* Modal Styles */
         .modal {
             display: none;
@@ -258,24 +287,18 @@
                             <option value="">Upload file first...</option>
                         </select>
                     </div>
+                    <div class="tabs">
+                        <button class="tab active" onclick="setMode('Leaves')">Leaves Analysis</button>
+                        <button class="tab" onclick="setMode('Demography')">Demography Analysis</button>
+                        <button class="tab" onclick="setMode('Education')">Education Analysis</button>
+                    </div>
                     <div id="status"></div>
                 </div>
             </div>
 
             <div class="main">
                 <div class="charts-grid" id="chartsContainer">
-                    <div class="card">
-                        <div id="plot1" style="height: 300px;"></div>
-                    </div>
-                    <div class="card">
-                        <div id="plot2" style="height: 300px;"></div>
-                    </div>
-                    <div class="card">
-                        <div id="plot3" style="height: 300px;"></div>
-                    </div>
-                    <div class="card">
-                        <div id="plot4" style="height: 300px;"></div>
-                    </div>
+                    <!-- Dynamic chart containers will be generated here -->
                 </div>
                 <div class="card" id="fCard" style="display:none;">
                     <h3>Factor Table (Correlation Factors)</h3>
@@ -302,6 +325,19 @@
         const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         let workbookData = null;
         let processedResults = {};
+        let currentMode = 'Leaves';
+        let globalEmployees = [];
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.remove('active');
+                if(t.innerText.includes(mode)) t.classList.add('active');
+            });
+            if (globalEmployees.length > 0 && processedResults.year) {
+                processFactorsAndRender();
+            }
+        }
 
         function handleFile() {
             const input = document.getElementById('fileInput');
@@ -352,7 +388,7 @@
                 if (p.match(/^\d{4}$/)) year = parseInt(p);
             });
 
-            const employees = [];
+            globalEmployees = [];
 
             // Determine actual number of days in this specific month/year
             const daysInMonthCount = new Date(year, monthIdx + 1, 0).getDate();
@@ -361,6 +397,9 @@
             rows.forEach((row, idx) => {
                 const empName = row['NAME'] || `Unknown ${idx + 1}`;
                 const userId = row['USERID'] || `ID_${idx + 1}`;
+                const demography = row['Demography'] || row['demography'] || 'Unknown';
+                const education = row['Education'] || row['education'] || 'Unknown';
+
                 let totalLeaves = 0;
                 const dailyStatus = {};
 
@@ -378,35 +417,68 @@
                     }
                 });
 
-                let factor = 1;
-                if (totalLeaves <= 5) factor = 1;
-                else if (totalLeaves <= 10) factor = 2;
-                else if (totalLeaves <= 15) factor = 3;
-                else factor = 4;
-
-                employees.push({ name: empName, id: userId, totalLeaves, dailyStatus, factor });
+                globalEmployees.push({ name: empName, id: userId, demography, education, totalLeaves, dailyStatus });
             });
 
-            const factors = [
-                { id: 1, label: '0-5 Days', emps: employees.filter(e => e.factor === 1) },
-                { id: 2, label: '5-10 Days', emps: employees.filter(e => e.factor === 2) },
-                { id: 3, label: '10-15 Days', emps: employees.filter(e => e.factor === 3) },
-                { id: 4, label: '15-31 Days', emps: employees.filter(e => e.factor === 4) }
-            ];
+            processedResults = { sortedDays: daysArray, year, monthIdx };
 
-            processedResults = { employees, factors, sortedDays: daysArray, year, monthIdx };
+            processFactorsAndRender();
 
-            renderCharts(factors, year, monthIdx);
-            renderTable(employees, factors, daysArray);
-
-            document.getElementById('fCard').style.display = 'block';
             document.getElementById('status').innerText = '✓ Analysis Complete';
+        }
+
+        function processFactorsAndRender() {
+            let factors = [];
+            
+            if (currentMode === 'Leaves') {
+                globalEmployees.forEach(e => {
+                    if (e.totalLeaves <= 5) e.factor = 1;
+                    else if (e.totalLeaves <= 10) e.factor = 2;
+                    else if (e.totalLeaves <= 15) e.factor = 3;
+                    else e.factor = 4;
+                });
+                factors = [
+                    { id: 1, label: '0-5 Days', emps: globalEmployees.filter(e => e.factor === 1) },
+                    { id: 2, label: '5-10 Days', emps: globalEmployees.filter(e => e.factor === 2) },
+                    { id: 3, label: '10-15 Days', emps: globalEmployees.filter(e => e.factor === 3) },
+                    { id: 4, label: '15-31 Days', emps: globalEmployees.filter(e => e.factor === 4) }
+                ];
+            } else if (currentMode === 'Demography') {
+                const groups = [...new Set(globalEmployees.map(e => e.demography))].filter(Boolean);
+                factors = groups.map((g, i) => {
+                    const emps = globalEmployees.filter(e => e.demography === g);
+                    emps.forEach(e => e.factor = i + 1);
+                    return { id: i + 1, label: g, emps };
+                });
+            } else if (currentMode === 'Education') {
+                const groups = [...new Set(globalEmployees.map(e => e.education))].filter(Boolean);
+                factors = groups.map((g, i) => {
+                    const emps = globalEmployees.filter(e => e.education === g);
+                    emps.forEach(e => e.factor = i + 1);
+                    return { id: i + 1, label: g, emps };
+                });
+            }
+
+            processedResults.factors = factors;
+            renderCharts(factors, processedResults.year, processedResults.monthIdx);
+            renderTable(globalEmployees, factors, processedResults.sortedDays);
+            document.getElementById('fCard').style.display = 'block';
         }
 
         function renderCharts(factors, year, monthIdx) {
             const wks = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const container = document.getElementById('chartsContainer');
+            container.innerHTML = '';
+            
+            const colors = ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
 
             factors.forEach((f, i) => {
+                const chartDiv = document.createElement('div');
+                chartDiv.className = 'card';
+                const plotId = `plot_dynamic_${i}`;
+                chartDiv.innerHTML = `<div id="${plotId}" style="height: 300px;"></div>`;
+                container.appendChild(chartDiv);
+                
                 const counts = { 'Monday': 0, 'Tuesday': 0, 'Wednesday': 0, 'Thursday': 0, 'Friday': 0, 'Saturday': 0, 'Sunday': 0 };
 
                 f.emps.forEach(emp => {
@@ -427,7 +499,7 @@
                     type: 'scatter',
                     mode: 'lines+markers',
                     name: f.label,
-                    line: { shape: 'spline', color: ['#6366f1', '#a855f7', '#ec4899', '#f97316'][i], width: 3 },
+                    line: { shape: 'spline', color: colors[i % colors.length], width: 3 },
                     marker: { size: 8 }
                 };
 
@@ -440,7 +512,7 @@
                     yaxis: { showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }
                 };
 
-                Plotly.newPlot(`plot${i + 1}`, [trace], layout);
+                Plotly.newPlot(plotId, [trace], layout);
             });
         }
 
