@@ -472,42 +472,7 @@
       renderTable(globalEmployees, factors, processedResults.sortedDays);
       document.getElementById('fCard').style.display = 'block';
     }
-      let factors = [];
 
-      if (currentMode === 'Leaves') {
-        globalEmployees.forEach(e => {
-          if (e.totalLeaves <= 5) e.factor = 1;
-          else if (e.totalLeaves <= 10) e.factor = 2;
-          else if (e.totalLeaves <= 15) e.factor = 3;
-          else e.factor = 4;
-        });
-        factors = [
-          { id: 1, label: '0-5 Days', emps: globalEmployees.filter(e => e.factor === 1) },
-          { id: 2, label: '5-10 Days', emps: globalEmployees.filter(e => e.factor === 2) },
-          { id: 3, label: '10-15 Days', emps: globalEmployees.filter(e => e.factor === 3) },
-          { id: 4, label: '15-31 Days', emps: globalEmployees.filter(e => e.factor === 4) }
-        ];
-      } else if (currentMode === 'Demography') {
-        const groups = [...new Set(globalEmployees.map(e => e.demography))].filter(Boolean);
-        factors = groups.map((g, i) => {
-          const emps = globalEmployees.filter(e => e.demography === g);
-          emps.forEach(e => e.factor = i + 1);
-          return { id: i + 1, label: g, emps };
-        });
-      } else if (currentMode === 'Education') {
-        const groups = [...new Set(globalEmployees.map(e => e.education))].filter(Boolean);
-        factors = groups.map((g, i) => {
-          const emps = globalEmployees.filter(e => e.education === g);
-          emps.forEach(e => e.factor = i + 1);
-          return { id: i + 1, label: g, emps };
-        });
-      }
-
-      processedResults.factors = factors;
-      renderCharts(factors, processedResults.year, processedResults.monthIdx);
-      renderTable(globalEmployees, factors, processedResults.sortedDays);
-      document.getElementById('fCard').style.display = 'block';
-    }
 
     async function renderCharts(factors, year, monthIdx) {
       const wks = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
